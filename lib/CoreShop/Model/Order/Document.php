@@ -378,11 +378,18 @@ abstract class Document extends Base
         $documentItem->setAmount($amount);
         $documentItem->setParent($this->getPathForItems());
         $documentItem->setTotal($orderItem->getPrice() * $amount);
+        $documentItem->setBaseTotal($orderItem->getBasePrice() * $amount);
         $documentItem->setTotalTax(($orderItem->getPrice() - $orderItem->getPriceWithoutTax()) * $amount);
-        $this->setDocumentItemTaxes($orderItem, $documentItem, $documentItem->getTotalWithoutTax());
+        $documentItem->setBaseTotalTax(($orderItem->getBasePrice() - $orderItem->getBasePriceWithoutTax()) * $amount);
+        $documentItem->setTotalWithoutTax($documentItem->getTotal() - $documentItem->getTotalTax());
+        $documentItem->setBaseTotalWithoutTax($documentItem->getBaseTotal() - $documentItem->getBaseTotalTax());
         $documentItem->setOrderItem($orderItem);
         $documentItem->setKey($orderItem->getKey());
         $documentItem->setPublished(true);
+
+        $this->setDocumentItemTaxes($orderItem, $documentItem, $documentItem->getTotalWithoutTax(), false);
+        $this->setDocumentItemTaxes($orderItem, $documentItem, $documentItem->getBaseTotalWithoutTax(), true);
+
         $documentItem->save();
 
         return $documentItem;
@@ -394,15 +401,16 @@ abstract class Document extends Base
      * @param Item $orderItem
      * @param Document\Item $docItem
      * @param $amount
+     * @param $base
      */
-    protected function setDocumentItemTaxes(Item $orderItem, Document\Item $docItem, $amount)
+    protected function setDocumentItemTaxes(Item $orderItem, Document\Item $docItem, $amount, $base = true)
     {
         $itemTaxes = new Object\Fieldcollection();
         $totalTax = 0;
 
-        $orderTaxes = $orderItem->getTaxes();
+        $orderTaxes = $base ? $orderItem->getBaseTaxes() : $orderItem->getTaxes();
 
-        if (is_array($orderTaxes)) {
+        if ($orderTaxes instanceof Object\Fieldcollection) {
             foreach ($orderTaxes as $tax) {
                 if ($tax instanceof Order\Tax) {
                     $taxRate = Tax::create();
@@ -423,8 +431,14 @@ abstract class Document extends Base
             }
         }
 
-        $docItem->setTotalTax($totalTax);
-        $docItem->setTaxes($itemTaxes);
+        if ($base) {
+            $docItem->setBaseTotalTax($totalTax);
+            $docItem->setBaseTaxes($itemTaxes);
+        }
+        else {
+            $docItem->setTotalTax($totalTax);
+            $docItem->setTaxes($itemTaxes);
+        }
     }
 
     /**
@@ -598,7 +612,7 @@ abstract class Document extends Base
     }
 
     /**
-     * @return Invoice\Item[]
+     * @return Document\Item[]
      *
      * @throws ObjectUnsupportedException
      */
@@ -608,7 +622,7 @@ abstract class Document extends Base
     }
 
     /**
-     * @param Invoice\Item[] $items
+     * @param Document\Item[] $items
      *
      * @throws ObjectUnsupportedException
      */

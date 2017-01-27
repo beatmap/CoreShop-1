@@ -620,9 +620,12 @@ class CoreShop_Admin_OrderController extends Admin
                 "id" => $cart->getId(),
                 "date" => $cart->getCreationDate(),
                 "total" => $cart->getTotal(true),
+                "baseTotal" => $cart->getBaseTotal(true),
                 "name" => $cart->getName(),
-                "currency" => $this->getCurrency(\CoreShop::getTools()->getBaseCurrency()),
-                "productIds" => $productIds
+                "currency" => $this->getCurrency($cart->getCurrency()),
+                "baseCurrency" => $this->getCurrency(\CoreShop::getTools()->getBaseCurrency()),
+                "productIds" => $productIds,
+                "shop" => $cart->getShop() instanceof \CoreShop\Model\Shop ? $cart->getShop()->getId() : null
             ];
         }
 
@@ -658,8 +661,12 @@ class CoreShop_Admin_OrderController extends Admin
                     "id" => $order->getId(),
                     "date" => $order->getOrderDate() instanceof \Carbon\Carbon ? $order->getOrderDate()->getTimestamp() : ($order->getOrderDate() instanceof \Pimcore\Date ? $order->getOrderDate()->getTimestamp() : 0),
                     "total" => $order->getTotal(),
+                    "baseTotal" => $order->getBaseTotal(),
                     "currency" => $this->getCurrency($order->getCurrency()),
-                    "productIds" => $productIds
+                    "baseCurrency" => $order->getBaseCurrency() instanceof \CoreShop\Model\Currency ? $this->getCurrency($order->getBaseCurrency()) : $this->getCurrency(\CoreShop::getTools()->getBaseCurrency()),
+                    "productIds" => $productIds,
+                    "shop" => $order->getShop()->getId(),
+                    "lang" => $order->getLang()
                 ];
             }
         }
@@ -685,6 +692,8 @@ class CoreShop_Admin_OrderController extends Admin
                 $productFlat['amount'] = $productObject['amount'];
 
                 $productFlat['price'] = \CoreShop::getTools()->convertToCurrency($product->getPrice(true, false), $currency);
+                $productFlat['basePrice'] = $product->getPrice(true, false);
+
                 $result[] = $productFlat;
             }
         }
@@ -778,50 +787,62 @@ class CoreShop_Admin_OrderController extends Admin
         $values = [
             [
                 'key' => 'subtotal',
+                'base' => $cart->getBaseSubtotal(true),
                 'value' => $cart->getSubtotal(true)
             ],
             [
                 'key' => 'subtotal_tax',
+                'base' => $cart->getBaseSubtotalTax(),
                 'value' => $cart->getSubtotalTax()
             ],
             [
                 'key' => 'subtotal_without_tax',
+                'base' =>$cart->getBaseSubtotal(false),
                 'value' =>$cart->getSubtotal(false)
             ],
             [
                 'key' => 'shipping_without_tax',
+                'base' =>$cart->getBaseShipping(false),
                 'value' =>$cart->getShipping(false)
             ],
             [
                 'key' => 'shipping_tax',
+                'base' => $cart->getBaseShippingTax(),
                 'value' => $cart->getShippingTax()
             ],
             [
                 'key' => 'shipping',
+                'base' => $cart->getBaseShipping(true),
                 'value' => $cart->getShipping(true)
             ],
             [
                 'key' => 'discount_without_tax',
+                'base' => -1 * $cart->getBaseDiscount(false),
                 'value' => -1 * $cart->getDiscount(false)
             ],
             [
                 'key' => 'discount_tax',
+                'base' => -1 * $cart->getBaseDiscountTax(),
                 'value' => -1 * $cart->getDiscountTax()
             ],
             [
                 'key' => 'discount',
+                'base' => -1 * $cart->getBaseDiscount(true),
                 'value' => -1 * $cart->getDiscount(true)
             ],
             [
                 'key' => 'total_without_tax',
-                'value' =>$cart->getTotal(false)
+                'base' => $cart->getBaseTotal(false),
+                'value' => $cart->getTotal(false)
             ],
             [
                 'key' => 'total_tax',
-                'value' =>$cart->getTotalTax()
+                'base' => $cart->getBaseTotalTax(),
+                'value' => $cart->getTotalTax()
             ],
             [
                 'key' => 'total',
+                'base' => $cart->getBaseTotal(true),
                 'value' => $cart->getTotal(true)
             ]
         ];
@@ -1093,7 +1114,7 @@ class CoreShop_Admin_OrderController extends Admin
 
         $taxes = $order->getTaxes();
 
-        if (is_array($taxes)) {
+        if ($taxes instanceof Object\Fieldcollection) {
             foreach ($taxes as $tax) {
                 if ($tax instanceof \CoreShop\Model\Order\Tax) {
                     $summary[] = [
@@ -1197,6 +1218,7 @@ class CoreShop_Admin_OrderController extends Admin
     protected function getCurrency(CoreShop\Model\Currency $currency)
     {
         return [
+            'id' => $currency->getId(),
             'name' => $currency->getName(),
             'symbol' => $currency->getSymbol()
         ];

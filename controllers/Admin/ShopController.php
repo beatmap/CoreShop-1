@@ -37,6 +37,25 @@ class CoreShop_Admin_ShopController extends Admin\Data
             $model->setTemplate(\CoreShop\Model\Shop::getDefaultShop()->getTemplate());
         }
     }
+
+    /**
+     * @param \CoreShop\Model\AbstractModel $model
+     * @param $config
+     * @return mixed
+     */
+    protected function prepareTreeNodeConfig(\CoreShop\Model\AbstractModel $model, $config) {
+        if($model instanceof \CoreShop\Model\Shop) {
+            $currency = \CoreShop\Model\Currency::getById(\CoreShop\Model\Configuration::get('SYSTEM.BASE.CURRENCY', $model->getId()));
+
+            if($currency instanceof \CoreShop\Model\Currency)
+                $config['currency'] = $currency->getSymbol();
+            else {
+                $config['currency'] = '';
+            }
+        }
+
+        return $config;
+    }
     
     public function listSitesAction()
     {

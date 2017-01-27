@@ -26,13 +26,7 @@ use Pimcore\Model\Object;
  *
  * @method static Object\Listing\Concrete getByWholesalePrice ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByRetailPrice ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByPrice ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByPriceWithoutTax ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByAmount ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByTotalTax ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByTotal ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByIsGiftItem ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByTaxes ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseRetailPrice ($value, $limit = 0)
  */
 class Item extends Order\Document\Item
 {
@@ -126,6 +120,26 @@ class Item extends Order\Document\Item
      * @throws ObjectUnsupportedException
      */
     public function setRetailPrice($retailPrice)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseRetailPrice()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseRetailPrice
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseRetailPrice($baseRetailPrice)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }

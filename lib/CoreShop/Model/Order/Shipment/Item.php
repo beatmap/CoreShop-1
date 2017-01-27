@@ -24,13 +24,6 @@ use Pimcore\Model\Object;
  * Class Item
  * @package CoreShop\Model\Order\Shipment
  *
- * @method static Object\Listing\Concrete getByPrice ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByPriceWithoutTax ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByAmount ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByTotalTax ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByTotal ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByIsGiftItem ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByTaxes ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByWeight ($value, $limit = 0)
  */
 class Item extends Order\Document\Item

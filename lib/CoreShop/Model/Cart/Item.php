@@ -50,6 +50,17 @@ class Item extends Base
      *
      * @return mixed
      */
+    public function getBaseTotal($withTax = true) {
+        return $this->getAmount() * $this->getBaseProductPrice($withTax);
+    }
+
+    /**
+     * Calculates the total for the CartItem.
+     *
+     * @param $withTax boolean
+     *
+     * @return mixed
+     */
     public function getTotal($withTax = true)
     {
         return $this->getAmount() * $this->getProductPrice($withTax);
@@ -86,6 +97,16 @@ class Item extends Base
     }
 
     /**
+     * Get Product Price without currency conversion
+     *
+     * @param bool $withTax
+     * @return float|mixed
+     */
+    public function getBaseProductPrice($withTax = true) {
+        return $this->getProduct()->getPrice($withTax);
+    }
+
+    /**
      * Get Product Price
      *
      * @param bool $withTax
@@ -93,7 +114,18 @@ class Item extends Base
      */
     public function getProductPrice($withTax = true)
     {
-        return $this->getProduct()->getPrice($withTax);
+        return $this->convertToCurrency($this->getProduct()->getPrice($withTax));
+    }
+
+    /**
+     * Get Product Sales Price
+     *
+     * @param $withTax
+     * @return float
+     */
+    public function getBaseProductSalesPrice($withTax)
+    {
+        return $this->getProduct()->getSalesPrice($withTax);
     }
 
     /**
@@ -104,7 +136,17 @@ class Item extends Base
      */
     public function getProductSalesPrice($withTax)
     {
-        return $this->convertToCurrency($this->getProduct()->getSalesPrice($withTax));
+        return $this->convertToCurrency($this->getBaseProductSalesPrice($withTax));
+    }
+
+    /**
+     * Get Products Wholesale Price
+     *
+     * @return float
+     */
+    public function getBaseProductWholesalePrice()
+    {
+        return $this->getProduct()->getWholesalePrice();
     }
 
     /**
@@ -114,7 +156,17 @@ class Item extends Base
      */
     public function getProductWholesalePrice()
     {
-        return $this->convertToCurrency($this->getProduct()->getWholesalePrice());
+        return $this->convertToCurrency($this->getBaseProductWholesalePrice());
+    }
+
+    /**
+     * Get Products Retail Price
+     *
+     * @return float
+     */
+    public function getBaseProductRetailPrice()
+    {
+        return $this->getProduct()->getRetailPrice();
     }
 
     /**
@@ -124,7 +176,15 @@ class Item extends Base
      */
     public function getProductRetailPrice()
     {
-        return $this->convertToCurrency($this->getProduct()->getRetailPrice());
+        return $this->convertToCurrency($this->getBaseProductRetailPrice());
+    }
+
+    /**
+     * @return float
+     */
+    public function getBaseProductRetailPriceWithTax()
+    {
+        return $this->getProduct()->getRetailPriceWithTax();
     }
 
     /**
@@ -132,7 +192,15 @@ class Item extends Base
      */
     public function getProductRetailPriceWithTax()
     {
-        return $this->convertToCurrency($this->getProduct()->getRetailPriceWithTax());
+        return $this->convertToCurrency($this->getBaseProductRetailPriceWithTax());
+    }
+
+    /**
+     * @return float
+     */
+    public function getBaseProductRetailPriceWithoutTax()
+    {
+        return $this->getProduct()->getRetailPriceWithoutTax();
     }
 
     /**
@@ -140,7 +208,17 @@ class Item extends Base
      */
     public function getProductRetailPriceWithoutTax()
     {
-        return $this->convertToCurrency($this->getProduct()->getRetailPriceWithoutTax());
+        return $this->convertToCurrency($this->getBaseProductRetailPriceWithoutTax());
+    }
+
+    /**
+     * get total tax for product in item
+     *
+     * @return float
+     */
+    public function getBaseTotalProductTax()
+    {
+        return $this->getAmount() * $this->getBaseProductTaxAmount(false);
     }
 
     /**
@@ -150,17 +228,27 @@ class Item extends Base
      */
     public function getTotalProductTax()
     {
-        return $this->getAmount() * $this->getProductTaxAmount(false);
+        return $this->convertToCurrency($this->getBaseTotalProductTax());
     }
 
     /**
      * Get Single Item Tax for Cart Item
      *
-     * @return array|float
+     * @return float
+     */
+    public function getBaseItemTax()
+    {
+        return $this->getBaseProductTaxAmount(false) * $this->getCart()->getDiscountPercentage();
+    }
+
+    /**
+     * Get Single Item Tax for Cart Item
+     *
+     * @return float
      */
     public function getItemTax()
     {
-        return $this->getProductTaxAmount(false) * $this->getCart()->getDiscountPercentage();
+        return $this->convertToCurrency($this->getBaseItemTax());
     }
 
     /**
@@ -168,9 +256,30 @@ class Item extends Base
      *
      * @return float
      */
+    public function getBaseTotalTax()
+    {
+        return ($this->getAmount() * $this->getBaseItemTax());
+    }
+    
+    /**
+     * Get Tax Amount for Cart Item
+     *
+     * @return float
+     */
     public function getTotalTax()
     {
-        return ($this->getAmount() * $this->getItemTax());
+        return $this->convertToCurrency($this->getBaseTotalTax());
+    }
+
+    /**
+     * Returns array with key=>value for tax and value.
+     *
+     * @param $applyDiscountToTaxValues
+     *
+     * @return array
+     */
+    public function getBaseTaxes($applyDiscountToTaxValues = true) {
+        return $this->collectTaxes($applyDiscountToTaxValues, true);
     }
 
     /**
@@ -182,6 +291,15 @@ class Item extends Base
      */
     public function getTaxes($applyDiscountToTaxValues = true)
     {
+        return $this->collectTaxes($applyDiscountToTaxValues, false);
+    }
+
+    /**
+     * @param bool $applyDiscountToTaxValues
+     * @param bool $basePrice
+     * @return array
+     */
+    private function collectTaxes($applyDiscountToTaxValues = true, $basePrice = true) {
         $usedTaxes = [];
 
         $discountPercentage = $this->getCart()->getDiscountPercentage();
@@ -204,7 +322,7 @@ class Item extends Base
                 $addTax($tax);
             }
 
-            $itemTotal = $this->getTotal(false);
+            $itemTotal = $basePrice ? $this->getBaseTotal(false) : $this->getTotal(false);
             $taxesAmount = $taxCalculator->getTaxesAmount($itemTotal, true);
 
             if (is_array($taxesAmount)) {
@@ -219,6 +337,19 @@ class Item extends Base
         }
 
         return $usedTaxes;
+    }
+
+    /**
+     * @param bool $asArray
+     * @return array|float
+     */
+    public function getBaseProductTaxAmount($asArray = false)
+    {
+        if ($asArray) {
+            return $this->getProduct()->getBaseTaxAmount($asArray);
+        }
+
+        return $this->convertToCurrency($this->getProduct()->getBaseTaxAmount($asArray));
     }
 
     /**

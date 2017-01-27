@@ -205,6 +205,16 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                     },
                     {
                         xtype : 'gridcolumn',
+                        dataIndex : 'baseTotal',
+                        width : 150,
+                        align : 'right',
+                        text : t('coreshop_base_total'),
+                        renderer : function (value, metaData, record) {
+                            return '<span style="font-weight:bold">' + coreshop.util.format.currency(record.get("baseCurrency").symbol, value) + '</span>';
+                        }.bind(this)
+                    },
+                    {
+                        xtype : 'gridcolumn',
                         dataIndex : 'total',
                         width : 150,
                         align : 'right',
@@ -224,7 +234,7 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                             handler : function (grid, rowIndex) {
                                 var record = grid.getStore().getAt(rowIndex);
 
-                                this.addProductsToCart(record.get("productIds"), true);
+                                this.addProductsToCart(record.get("productIds"), true, record.get("currency").id, record.get("shop") ? record.get("shop").id : false);
                             }.bind(this)
                         }]
                     }
@@ -272,6 +282,16 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                         },
                         {
                             xtype: 'gridcolumn',
+                            dataIndex: 'baseTotal',
+                            width: 150,
+                            align: 'right',
+                            text : t('coreshop_base_total'),
+                            renderer: function (value, metaData, record) {
+                                return '<span style="font-weight:bold">' + coreshop.util.format.currency(record.get("baseCurrency").symbol, value) + '</span>';
+                            }.bind(this)
+                        },
+                        {
+                            xtype: 'gridcolumn',
                             dataIndex: 'total',
                             width: 150,
                             align: 'right',
@@ -291,7 +311,7 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                                 handler : function (grid, rowIndex) {
                                     var record = grid.getStore().getAt(rowIndex);
 
-                                    this.addProductsToCart(record.get("productIds"), true);
+                                    this.addProductsToCart(record.get("productIds"), true, record.get("currency").id, record.get("shop").id, record.get("lang"));
                                 }.bind(this)
                             }
                         ]
@@ -357,6 +377,22 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                 }
             });
 
+            this.cartPanelShop = Ext.create({
+                xtype: 'combo',
+                fieldLabel: t('coreshop_shop'),
+                store: pimcore.globalmanager.get('coreshop_shops'),
+                displayField: 'name',
+                valueField: 'id',
+                triggerAction: 'all',
+                typeAhead: false,
+                editable: false,
+                forceSelection: true,
+                queryMode: 'local',
+                hidden : !coreshop.settings.multishop,
+                value : 1,
+                width: 500
+            });
+
             var languageStore = [];
             var websiteLanguages = pimcore.settings.websiteLanguages;
 
@@ -398,20 +434,6 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                         }.bind(this)
                     },
                     {
-                        xtype : 'gridcolumn',
-                        dataIndex : 'price',
-                        width : 150,
-                        align : 'right',
-                        text : t('coreshop_price'),
-                        renderer : function (value, metaData, record) {
-                            return '<span style="font-weight:bold">' + coreshop.util.format.currency(this.currency.symbol, value) + '</span>';
-                        }.bind(this),
-                        /*field : { TODO: Make price editable
-                            xtype: 'numberfield',
-                            decimalPrecision : 2
-                        }*/
-                    },
-                    {
                         xtype: 'gridcolumn',
                         dataIndex: 'amount',
                         width: 100,
@@ -420,6 +442,40 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                             xtype: 'numberfield',
                             decimalPrecision: 0
                         }
+                    },
+                    {
+                        xtype : 'gridcolumn',
+                        dataIndex : 'basePrice',
+                        width : 150,
+                        align : 'right',
+                        text : t('coreshop_base_price'),
+                        renderer : function (value, metaData, record) {
+                            return '<span style="font-weight:bold">' + coreshop.util.format.currency(this.getBaseCurrencySymbol(), value) + '</span>';
+                        }.bind(this)
+                    },
+                    {
+                        xtype : 'gridcolumn',
+                        dataIndex : 'total',
+                        width : 150,
+                        align : 'right',
+                        text : t('coreshop_base_total'),
+                        renderer : function (value, metaData, record) {
+                            var price = record.get("basePrice");
+                            var amount = record.get("amount");
+                            var total = price * amount;
+
+                            return '<span style="font-weight:bold">' + coreshop.util.format.currency(this.getBaseCurrencySymbol(), total) + '</span>';
+                        }.bind(this)
+                    },
+                    {
+                        xtype : 'gridcolumn',
+                        dataIndex : 'price',
+                        width : 150,
+                        align : 'right',
+                        text : t('coreshop_price'),
+                        renderer : function (value, metaData, record) {
+                            return '<span style="font-weight:bold">' + coreshop.util.format.currency(this.currency.symbol, value) + '</span>';
+                        }.bind(this)
                     },
                     {
                         xtype : 'gridcolumn',
@@ -472,6 +528,7 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                 items: [
                     this.cartPanelGrid,
                     this.cartPanelCurrency,
+                    this.cartPanelShop,
                     this.cartPanelLanguage
                 ]
             });
@@ -480,7 +537,7 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
         return this.cartPanel;
     },
 
-    addProductsToCart: function(products, reset) {
+    addProductsToCart: function(products, reset, currency, shop, language) {
         this.cartPanel.setLoading(t("loading"));
 
         Ext.Ajax.request({
@@ -500,6 +557,18 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                         }
 
                         this.cartPanelStore.add(response.products);
+
+                        if(currency) {
+                            this.cartPanelCurrency.setValue(currency);
+                        }
+
+                        if(shop) {
+                            this.cartPanelShop.setValue(shop);
+                        }
+
+                        if(language) {
+                            this.cartPanelLanguage.setValue(language);
+                        }
 
                         this.reloadCarriers();
                         this.reloadTotalPanel();
@@ -783,22 +852,6 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                 labelWidth : 150
             });
 
-            this.totalPanelShop = Ext.create({
-                xtype: 'combo',
-                fieldLabel: t('coreshop_shop'),
-                store: pimcore.globalmanager.get('coreshop_shops'),
-                displayField: 'name',
-                valueField: 'id',
-                triggerAction: 'all',
-                typeAhead: false,
-                editable: false,
-                forceSelection: true,
-                queryMode: 'local',
-                hidden : !coreshop.settings.multishop,
-                value : 1,
-                labelWidth : 150,
-            });
-
             this.totalPanel = Ext.create('Ext.panel.Panel', {
                 title: t('coreshop_total'),
                 margin: '0 20 20 0',
@@ -809,12 +862,12 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                     {
                         xtype : 'grid',
                         store : this.totalStore,
-                        hideHeaders : true,
                         margin : '0 0 20 0',
                         columns : [
                             {
                                 xtype : 'gridcolumn',
                                 dataIndex : 'key',
+                                sortable : false,
                                 flex : 1,
                                 renderer : function (value, metaData, record) {
                                     return '<span style="font-weight:bold">' + t('coreshop_' + value) + '</span>';
@@ -822,17 +875,31 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                             },
                             {
                                 xtype: 'gridcolumn',
-                                dataIndex: 'value',
+                                dataIndex: 'base',
+                                sortable : false,
                                 width : 150,
                                 align : 'right',
+                                text : t('coreshop_base_value'),
+                                renderer: function (value) {
+                                    var symbol = this.getBaseCurrencySymbol();
+
+                                    return '<span style="font-weight:bold">' + coreshop.util.format.currency(symbol, value) + '</span>';
+                                }.bind(this)
+                            },
+                            {
+                                xtype: 'gridcolumn',
+                                dataIndex: 'value',
+                                sortable : false,
+                                width : 150,
+                                align : 'right',
+                                text : t('coreshop_value'),
                                 renderer: function (value) {
                                     return '<span style="font-weight:bold">' + coreshop.util.format.currency(this.currency.symbol, value) + '</span>';
                                 }.bind(this)
                             }
                         ]
                     },
-                    this.totalPanelPaymentModule,
-                    this.totalPanelShop
+                    this.totalPanelPaymentModule
                 ],
                 dockedItems: [{
                     xtype: 'toolbar',
@@ -847,7 +914,7 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
                             }.bind(this)
                         }
                     ]
-                }],
+                }]
             });
         }
 
@@ -922,6 +989,10 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
         });
     },
 
+    getBaseCurrencySymbol : function() {
+        return this.cartPanelShop.getValue() ? pimcore.globalmanager.get('coreshop_shops').getById(this.cartPanelShop.getValue()).get("currency") : '';
+    },
+
     getParams : function() {
         return {
             customerId: this.customerId,
@@ -933,7 +1004,7 @@ pimcore.plugin.coreshop.orders.create.order = Class.create({
             carrier: this.deliveryPanelCarrier.getValue(),
             freeShipping : this.deliveryPanelFreeShipping.getValue() ? 1 : 0,
             paymentProvider : this.totalPanelPaymentModule.getValue(),
-            shop : this.totalPanelShop.getValue()
+            shop : this.cartPanelShop.getValue()
         };
     }
 });

@@ -126,6 +126,17 @@ class Cart extends Base
      */
     public function getDiscount($withTax = true)
     {
+        return $this->convertToCurrency($this->getBaseDiscount($withTax));
+    }
+
+    /**
+     * calculates discount for the cart, without currency conversion.
+     *
+     * @param boolean $withTax
+     *
+     * @return int
+     */
+    public function getBaseDiscount($withTax = true) {
         $priceRule = $this->getPriceRules();
         $discount = 0;
 
@@ -166,22 +177,40 @@ class Cart extends Base
     }
 
     /**
+     * calculates the discount tax, without currency conversion
+     *
+     * @return number
+     */
+    public function getBaseDiscountTax()
+    {
+        return abs($this->getBaseDiscount(true) - $this->getBaseDiscount(false));
+    }
+
+    /**
      * calculates the subtotal for the cart.
      *
-     * @param bool $useTaxes use taxes
+     * @param bool $withTax
      *
      * @return float
      */
-    public function getSubtotal($useTaxes = true)
+    public function getSubtotal($withTax = true)
+    {
+        return $this->convertToCurrency($this->getBaseSubtotal($withTax));
+    }
+
+    /**
+     * calculates the subtotal for the cart, without currency conversion
+     *
+     * @param bool $withTax
+     *
+     * @return float
+     */
+    public function getBaseSubtotal($withTax = true)
     {
         $subtotal = 0;
 
         foreach ($this->getItems() as $item) {
-            if ($useTaxes) {
-                $subtotal += $item->getTotal();
-            } else {
-                $subtotal += $item->getTotal(false);
-            }
+            $subtotal += $item->getBaseTotal($withTax);
         }
 
         return $subtotal;
@@ -201,6 +230,19 @@ class Cart extends Base
     }
 
     /**
+     * calculates the subtotal tax for the cart, without currency conversion.
+     *
+     * @return float
+     */
+    public function getBaseSubtotalTax()
+    {
+        $subtotalTi = $this->getBaseSubtotal(true);
+        $subtotalTe = $this->getBaseSubtotal(false);
+
+        return abs($subtotalTi - $subtotalTe);
+    }
+
+    /**
      * Returns array with key=>value for tax and value.
      *
      * @param $applyDiscountToTaxValues
@@ -208,6 +250,31 @@ class Cart extends Base
      * @return array
      */
     public function getTaxes($applyDiscountToTaxValues = true)
+    {
+        return $this->collectTaxes($applyDiscountToTaxValues, false);
+    }
+
+    /**
+     * Returns array with key=>value for tax and value, without currency conversion
+     *
+     * @param $applyDiscountToTaxValues
+     *
+     * @return array
+     */
+    public function getBaseTaxes($applyDiscountToTaxValues = true)
+    {
+        return $this->collectTaxes($applyDiscountToTaxValues, true);
+    }
+
+    /**
+     * Returns array with key=>value for tax and value.
+     *
+     * @param $applyDiscountToTaxValues
+     * @param $baseCurrency
+     *
+     * @return array
+     */
+    public function collectTaxes($applyDiscountToTaxValues = true, $baseCurrency = false)
     {
         $usedTaxes = [];
 
@@ -225,7 +292,7 @@ class Cart extends Base
         };
 
         foreach ($this->getItems() as $item) {
-            $itemTaxes = $item->getTaxes($applyDiscountToTaxValues);
+            $itemTaxes = $baseCurrency ? $item->getBaseTaxes($applyDiscountToTaxValues) : $item->getTaxes($applyDiscountToTaxValues);
 
             foreach ($itemTaxes as $itemTax) {
                 $addTax($itemTax['tax'], $itemTax['amount']);
@@ -239,7 +306,7 @@ class Cart extends Base
                 $shippingTax = $this->getShippingProvider()->getTaxCalculator();
 
                 if ($shippingTax instanceof TaxCalculator) {
-                    $taxesAmount = $shippingTax->getTaxesAmount($this->getShipping(false), true);
+                    $taxesAmount = $shippingTax->getTaxesAmount($baseCurrency ? $this->getBaseShipping(false) : $this->getShipping(false), true);
 
                     if (is_array($taxesAmount)) {
                         foreach ($taxesAmount as $id => $amount) {
@@ -254,7 +321,7 @@ class Cart extends Base
 
         if ($paymentProvider instanceof PaymentPlugin) {
             if ($paymentProvider->getPaymentTaxCalculator($this) instanceof TaxCalculator) {
-                $taxesAmount = $paymentProvider->getPaymentTaxCalculator($this)->getTaxesAmount($this->getPaymentFee(false), true);
+                $taxesAmount = $paymentProvider->getPaymentTaxCalculator($this)->getTaxesAmount($baseCurrency ? $this->getBasePaymentFee(false) : $this->getPaymentFee(false), true);
 
                 if(is_array($taxesAmount)) {
                     foreach ($taxesAmount as $id => $amount) {
@@ -300,11 +367,11 @@ class Cart extends Base
      * get Shipping costs for specific carrier.
      *
      * @param Carrier $carrier
-     * @param bool    $useTax
+     * @param bool $withTax
      *
      * @return float
      */
-    public function getShippingCostsForCarrier(Carrier $carrier, $useTax = true)
+    public function getShippingCostsForCarrier(Carrier $carrier, $withTax = true)
     {
         if (!$this->getFreeShipping()) {
             $freeShippingCurrency = floatval(Configuration::get('SYSTEM.SHIPPING.FREESHIPPING_PRICE'));
@@ -324,7 +391,7 @@ class Cart extends Base
                 }
             }
 
-            return $this->convertToCurrency($carrier->getDeliveryPrice($this, $useTax));
+            return $carrier->getDeliveryPrice($this, $withTax);
         }
 
         return 0;
@@ -355,22 +422,21 @@ class Cart extends Base
     }
 
     /**
-     * calculates shipping costs for the cart.
+     * calculates shipping costs for the cart, without currency conversion.
      *
-     * @param $useTax boolean include taxes
+     * @param $withTax
      *
      * @return float
      */
-    public function getShipping($useTax = true)
-    {
+    public function getBaseShipping($withTax = true) {
         if (!$this->getFreeShipping()) {
-            $cacheKey = $useTax ? 'shipping' : 'shippingWithoutTax';
+            $cacheKey = $withTax ? 'shipping' : 'shippingWithoutTax';
 
             if (is_null($this->$cacheKey)) {
                 $this->$cacheKey = 0;
 
                 if ($this->getShippingProvider() instanceof Carrier) {
-                    $this->$cacheKey = $this->getShippingCostsForCarrier($this->getShippingProvider(), $useTax);
+                    $this->$cacheKey = $this->getShippingCostsForCarrier($this->getShippingProvider(), $withTax);
                 }
             }
 
@@ -381,15 +447,37 @@ class Cart extends Base
     }
 
     /**
+     * calculates shipping costs for the cart.
+     *
+     * @param $useTax boolean include taxes
+     *
+     * @return float
+     */
+    public function getShipping($useTax = true)
+    {
+        return $this->convertToCurrency($this->getBaseShipping($useTax));
+    }
+
+    /**
      * get shipping tax rate.
      *
      * @return int
      */
     public function getShippingTaxRate()
     {
+        return $this->convertToCurrency($this->getBaseShippingTax());
+    }
+
+    /**
+     * calculates shipping tax for the cart, without currency conversion.
+     *
+     * @return float
+     */
+    public function getBaseShippingTax()
+    {
         if (!$this->getFreeShipping()) {
             if ($this->getShippingProvider() instanceof Carrier) {
-                return $this->getShippingProvider()->getTaxRate($this);
+                return $this->getShippingProvider()->getTaxAmount($this);
             }
         }
 
@@ -433,10 +521,22 @@ class Cart extends Base
      */
     public function getPaymentFee($withTax = true)
     {
+        return $this->convertToCurrency($this->getBasePaymentFee($withTax));
+    }
+
+    /**
+     * Calculate the payment fee, without currency conversion
+     *
+     * @param $withTax boolean use taxes
+     *
+     * @return float
+     */
+    public function getBasePaymentFee($withTax = true)
+    {
         $paymentProvider = $this->getPaymentProvider();
 
         if ($paymentProvider instanceof PaymentPlugin) {
-            return $this->convertToCurrency($paymentProvider->getPaymentFee($this, $withTax));
+            return $paymentProvider->getPaymentFee($this, $withTax);
         }
 
         return 0;
@@ -465,10 +565,20 @@ class Cart extends Base
      */
     public function getPaymentFeeTax()
     {
+        return $this->convertToCurrency($this->getBasePaymentFeeTax());
+    }
+
+    /**
+     * Calculate the payment fee tax, without currency conversion.
+     *
+     * @return float
+     */
+    public function getBasePaymentFeeTax()
+    {
         $paymentProvider = $this->getPaymentProvider();
 
         if ($paymentProvider instanceof PaymentPlugin) {
-            return $this->convertToCurrency($paymentProvider->getPaymentFeeTax($this));
+            return $paymentProvider->getPaymentFeeTax($this);
         }
 
         return 0;
@@ -488,6 +598,19 @@ class Cart extends Base
     }
 
     /**
+     * get all taxes, without currency conversion
+     *
+     * @return float
+     */
+    public function getBaseTotalTax()
+    {
+        $totalWithTax = $this->getBaseTotal();
+        $totalWithoutTax = $this->getBaseTotal(false);
+
+        return abs($totalWithTax - $totalWithoutTax);
+    }
+
+    /**
      * calculates the total of the cart.
      *
      * @param boolean $withTax get price with tax or without
@@ -496,8 +619,20 @@ class Cart extends Base
      */
     public function getTotal($withTax = true)
     {
-        $totalWd = $this->getTotalWithoutDiscount($withTax);
-        $discount = $this->getDiscount($withTax);
+        return $this->convertToCurrency($this->getBaseTotal($withTax));
+    }
+
+    /**
+     * calculates the total of the cart, without currency conversion
+     *
+     * @param boolean $withTax get price with tax or without
+     *
+     * @return float
+     */
+    public function getBaseTotal($withTax = true)
+    {
+        $totalWd = $this->getBaseTotalWithoutDiscount($withTax);
+        $discount = $this->getBaseDiscount($withTax);
 
         return ($totalWd) - $discount;
     }
@@ -510,9 +645,20 @@ class Cart extends Base
      */
     public function getTotalWithoutDiscount($withTax = true)
     {
-        $subtotal = $this->getSubtotal($withTax);
-        $shipping = $this->getShipping($withTax);
-        $payment = $this->getPaymentFee($withTax);
+        return $this->convertToCurrency($this->getBaseTotalWithoutDiscount($withTax));
+    }
+
+    /**
+     * calculates the total without discount
+     *
+     * @param bool $withTax
+     * @return float
+     */
+    public function getBaseTotalWithoutDiscount($withTax = true)
+    {
+        $subtotal = $this->getBaseSubtotal($withTax);
+        $shipping = $this->getBaseShipping($withTax);
+        $payment = $this->getBasePaymentFee($withTax);
 
         return $subtotal + $shipping + $payment;
     }
@@ -862,14 +1008,13 @@ class Cart extends Base
      */
     public function createOrder(Payment $paymentModule = null, $language = null)
     {
-        Logger::info('Create order for cart '.$this->getId());
-
+        Logger::info('Create order for cart ' . $this->getId());
 
         if (is_null($language)) {
             if (\Zend_Registry::isRegistered("Zend_Locale")) {
                 $language = \CoreShop::getTools()->getLocale();
             } else {
-                throw new Exception("language not found in registry and not set as param");
+                throw new Exception("Language not found in registry and not set as param");
             }
         }
 
@@ -898,32 +1043,55 @@ class Cart extends Base
         } else {
             $order->setOrderDate(Carbon::now());
         }
+
         $order->setCurrency($this->getCurrency());
         $order->setShop($this->getShop());
 
         if ($this->getCarrier() instanceof Carrier) {
+            $order->setShippingTaxRate($this->getShippingTaxRate());
             $order->setCarrier($this->getCarrier());
+
             $order->setShipping($this->getShipping());
             $order->setShippingWithoutTax($this->getShipping(false));
-            $order->setShippingTaxRate($this->getShippingTaxRate());
             $order->setShippingTax($this->getShippingTax());
+
+            $order->setBaseShipping($this->getBaseShipping());
+            $order->setBaseShippingWithoutTax($this->getBaseShipping(false));
+            $order->setBaseShippingTax($this->getBaseShippingTax());
         } else {
-            $order->setShipping(0);
             $order->setShippingTaxRate(0);
+
+            $order->setShipping(0);
             $order->setShippingWithoutTax(0);
             $order->setShippingTax(0);
+
+            $order->setBaseShipping(0);
+            $order->setBaseShippingWithoutTax(0);
+            $order->setBaseShippingTax(0);
         }
+        $order->setPaymentFeeTaxRate($this->getPaymentFeeTaxRate());
 
         $order->setPaymentFee($this->getPaymentFee());
         $order->setPaymentFeeTax($this->getPaymentFeeTax());
         $order->setPaymentFeeWithoutTax($this->getPaymentFee(false));
-        $order->setPaymentFeeTaxRate($this->getPaymentFeeTaxRate());
+
+        $order->setBasePaymentFee($this->getBasePaymentFee());
+        $order->setBasePaymentFeeTax($this->getBasePaymentFeeTax());
+        $order->setBasePaymentFeeWithoutTax($this->getBasePaymentFee(false));
+
         $order->setTotalTax($this->getTotalTax());
         $order->setTotal($this->getTotal());
         $order->setTotalWithoutTax($this->getTotal(false));
         $order->setSubtotal($this->getSubtotal());
         $order->setSubtotalWithoutTax($this->getSubtotal(false));
         $order->setSubtotalTax($this->getSubtotalTax());
+
+        $order->setBaseTotalTax($this->getBaseTotalTax());
+        $order->setBaseTotal($this->getBaseTotal());
+        $order->setBaseTotalWithoutTax($this->getBaseTotal(false));
+        $order->setBaseSubtotal($this->getBaseSubtotal());
+        $order->setBaseSubtotalWithoutTax($this->getBaseSubtotal(false));
+        $order->setBaseSubtotalTax($this->getBaseSubtotalTax());
 
         if (\CoreShop::getTools()->getVisitor() instanceof Visitor) {
             $order->setVisitorId(\CoreShop::getTools()->getVisitor()->getId());

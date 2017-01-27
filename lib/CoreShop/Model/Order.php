@@ -61,8 +61,24 @@ use Pimcore\Model\User as PimcoreUser;
  * @method static Object\Listing\Concrete getByTotalTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTotal ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTotalPayed ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseDiscount ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseSubtotal ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseSubtotalWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseSubtotalTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShipping ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShippingTaxRate ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShippingWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShippingTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFee ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFeeTaxRate ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFeeWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFeeTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotalTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotal ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotalPayed ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByShop ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTaxes ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTaxes ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentProvider ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentProviderDescription ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentProviderToken ($value, $limit = 0)
@@ -225,38 +241,31 @@ class Order extends Base
             $item->setPublished(true);
 
             $item->setProduct($cartItem->getProduct());
+
             $item->setWholesalePrice($cartItem->getProductWholesalePrice());
             $item->setRetailPrice($cartItem->getProductRetailPrice());
             $item->setPrice($cartItem->getProductPrice(true));
             $item->setPriceWithoutTax($cartItem->getProductPrice(false));
+            $item->setTotal(\CoreShop::getTools()->roundPrice($cartItem->getTotal()));
+            $item->setTotalTax(\CoreShop::getTools()->roundPrice($cartItem->getTotalProductTax()));
+            $item->setTaxes($this->collectCartItemTaxes($cartItem, false));
+
+            $item->setBaseRetailPrice($cartItem->getBaseProductWholesalePrice());
+            $item->setBasePrice($cartItem->getBaseProductPrice(true));
+            $item->setBasePriceWithoutTax($cartItem->getBaseProductPrice(false));
+            $item->setBaseTotal(\CoreShop::getTools()->roundPrice($cartItem->getBaseTotal()));
+            $item->setBaseTotalTax(\CoreShop::getTools()->roundPrice($cartItem->getBaseTotalProductTax()));
+            $item->setBaseTaxes($this->collectCartItemTaxes($cartItem, true));
+
             $item->setAmount($cartItem->getAmount());
             $item->setExtraInformation($cartItem->getExtraInformation());
             $item->setIsGiftItem($cartItem->getIsGiftItem());
-            $item->setTotal(\CoreShop::getTools()->roundPrice($cartItem->getTotal()));
-            $item->setTotalTax(\CoreShop::getTools()->roundPrice($cartItem->getTotalProductTax()));
             $item->setIsVirtualProduct($cartItem->getIsVirtualProduct());
 
             if ($cartItem->getVirtualAsset() instanceof Asset) {
                 $item->setVirtualAsset($cartItem->getVirtualAsset());
             }
 
-            $itemTaxes = new Object\Fieldcollection();
-
-            foreach ($cartItem->getTaxes(false) as $taxes) {
-                $itemTax = Order\Tax::create();
-
-                $tax = $taxes['tax'];
-
-                if ($tax instanceof Tax) {
-                    $itemTax->setName($tax->getName());
-                    $itemTax->setRate($tax->getRate());
-                    $itemTax->setAmount($taxes['amount']);
-
-                    $itemTaxes->add($itemTax);
-                }
-            }
-
-            $item->setTaxes($itemTaxes);
             $item->save();
 
             //Stock Management
@@ -267,23 +276,16 @@ class Order extends Base
             ++$i;
         }
 
-        $taxes = new Object\Fieldcollection();
+        $this->setTaxes($this->collectCartTaxes($cart, false));
+        $this->setBaseTaxes($this->collectCartTaxes($cart, true));
 
-        foreach ($cart->getTaxes() as $tax) {
-            $taxObject = $tax['tax'];
-            $taxAmount = $tax['amount'];
-
-            $tax = Order\Tax::create();
-            $tax->setName($taxObject->getName());
-            $tax->setRate($taxObject->getRate());
-            $tax->setAmount(\CoreShop::getTools()->roundPrice($taxAmount));
-
-            $taxes->add($tax);
-        }
-
-        $this->setTaxes($taxes);
         $this->setDiscount($cart->getDiscount());
         $this->setDiscountWithoutTax($cart->getDiscount(false));
+
+        $this->setBaseDiscount($cart->getBaseDiscount());
+        $this->setBaseDiscountWithoutTax($cart->getBaseDiscount(false));
+
+        $this->setBaseToOrderRate($this->getCurrency()->getExchangeRate());
 
         $fieldCollection = new Object\Fieldcollection();
 
@@ -318,6 +320,64 @@ class Order extends Base
     }
 
     /**
+     * Collect all Cart Item taxes
+     *
+     * @param Cart\Item $cartItem
+     * @param bool $base
+     *
+     * @return Object\Fieldcollection
+     */
+    protected function collectCartItemTaxes(\CoreShop\Model\Cart\Item $cartItem, $base = true) {
+        $itemTaxes = new Object\Fieldcollection();
+        $cartItemTaxes = $base ? $cartItem->getBaseTaxes(false) : $cartItem->getTaxes(false);
+
+        foreach ($cartItemTaxes as $taxes) {
+            $itemTax = Order\Tax::create();
+
+            $tax = $taxes['tax'];
+
+            if ($tax instanceof Tax) {
+                $itemTax->setName($tax->getName());
+                $itemTax->setRate($tax->getRate());
+                $itemTax->setAmount($taxes['amount']);
+
+                $itemTaxes->add($itemTax);
+            }
+        }
+
+        return $itemTaxes;
+    }
+
+    /**
+     * Collect all Cart taxes
+     *
+     * @param Cart $cart
+     * @param bool $base
+     *
+     * @return Object\Fieldcollection
+     */
+    protected function collectCartTaxes(Cart $cart, $base = true) {
+        $taxes = new Object\Fieldcollection();
+        $cartTaxes = $base ? $cart->getBaseTaxes() : $cart->getTaxes();
+
+        foreach ($cartTaxes as $tax) {
+            $taxObject = $tax['tax'];
+            $taxAmount = $tax['amount'];
+
+            if($taxObject instanceof Tax) {
+                $tax = Order\Tax::create();
+                $tax->setName($taxObject->getName());
+                $tax->setRate($taxObject->getRate());
+                $tax->setAmount(\CoreShop::getTools()->roundPrice($taxAmount));
+
+                $taxes->add($tax);
+            }
+        }
+
+        return $taxes;
+    }
+
+    /**
      * Update Order Item and recalc total and taxes
      *
      * @param Item $item
@@ -344,26 +404,49 @@ class Order extends Base
         }
 
         $currentPrice = $item->getPriceWithoutTax();
+        $basePriceWithoutTax = $priceWithoutTax / $this->getBaseToOrderRate();
+
         $currentAmount = $item->getAmount();
 
         $item->setAmount($amount);
+
         $item->setPriceWithoutTax($priceWithoutTax);
+        $item->setBasePriceWithoutTax($basePriceWithoutTax);
 
         //Recalc Tax
         $totalTax = 0;
+        $baseTotalTax = 0;
 
-        foreach ($item->getTaxes() as $tax) {
-            if ($tax instanceof Order\Tax) {
-                $taxValue = ((($tax->getRate() / 100) * $item->getPriceWithoutTax()));
-                $totalTax += $taxValue;
+        if ($item->getTaxes() instanceof Object\Fieldcollection) {
+            foreach ($item->getTaxes() as $tax) {
+                if ($tax instanceof Order\Tax) {
+                    $taxValue = ((($tax->getRate() / 100) * $item->getPriceWithoutTax()));
+                    $totalTax += $taxValue;
 
-                $tax->setAmount($taxValue * $item->getAmount());
+                    $tax->setAmount($taxValue * $item->getAmount());
+                }
+            }
+        }
+
+        if ($item->getBaseTaxes() instanceof Object\Fieldcollection) {
+            foreach ($item->getBaseTaxes() as $tax) {
+                if ($tax instanceof Order\Tax) {
+                    $taxValue = ((($tax->getRate() / 100) * $item->getBasePriceWithoutTax()));
+                    $baseTotalTax += $taxValue;
+
+                    $tax->setAmount($taxValue * $item->getAmount());
+                }
             }
         }
 
         $item->setTotalTax($totalTax * $item->getAmount());
+        $item->setBaseTotalTax($baseTotalTax * $item->getAmount());
+
         $item->setPrice($priceWithoutTax + $totalTax);
+        $item->setBasePrice($basePriceWithoutTax + $baseTotalTax);
+
         $item->setTotal($item->getAmount() * $item->getPrice());
+        $item->setBaseTotal($item->getAmount() * $item->getBasePrice());
         $item->save();
 
         $allItems = $this->getItems();
@@ -402,68 +485,121 @@ class Order extends Base
     protected function updateOrderSummary()
     {
         $totalTax = 0;
+        $baseTotalTax = 0;
+
         $subTotalTax = 0;
+        $baseSubTotalTax = 0;
+
         $subTotal = 0;
+        $baseSubTotal = 0;
+
         $taxRateValues = [];
+        $baseTaxRateValues=  [];
+
+        $newSubTotalWithoutDiscount = 0;
+        $baseNewSubTotalWithoutDiscount = 0;
 
         $currentTotal = $this->getTotal();
 
-        $addTax = function ($rate, $amount) use (&$taxRateValues) {
-            if (!array_key_exists((string)$rate, $taxRateValues)) {
-                $taxRateValues[(string)$rate] = 0;
+        $addTax = function ($rate, $amount, &$taxValues) {
+            if (!array_key_exists((string)$rate, $taxValues)) {
+                $taxValues[(string)$rate] = 0;
             }
 
-            $taxRateValues[(string)$rate] += $amount;
+            $taxValues[(string)$rate] += $amount;
         };
-
-        $newSubTotalWithoutDiscount = 0;
 
         foreach ($this->getItems() as $orderItem) {
             $newSubTotalWithoutDiscount += $orderItem->getTotalWithoutTax();
+            $baseNewSubTotalWithoutDiscount += $orderItem->getBaseTotalWithoutTax();
+
         }
 
         $newSubTotal = $newSubTotalWithoutDiscount - $this->getDiscountWithoutTax();
+        $baseNewSubTotal = $baseNewSubTotalWithoutDiscount - $this->getBaseDiscountWithoutTax();
+
         $newDiscountPercentage = ((100 / $newSubTotalWithoutDiscount) * $newSubTotal) / 100;
+        $baseNewDiscountPercentage = ((100 / $baseNewSubTotalWithoutDiscount) * $baseNewSubTotal) / 100;
 
 
         //Recaluclate Subtotal and taxes
         foreach ($this->getItems() as $item) {
             $subTotalTax += $item->getTotalTax() * $newDiscountPercentage;
-            $subTotal += $item->getTotal();
+            $baseSubTotalTax += $item->getBaseTotalTax() * $baseNewDiscountPercentage;
 
-            foreach ($item->getTaxes() as $tax) {
-                $addTax($tax->getRate(), $tax->getAmount() * $newDiscountPercentage);
+            $subTotal += $item->getTotal();
+            $baseSubTotal += $item->getBaseTotal();
+
+            if($item->getTaxes() instanceof Object\Fieldcollection) {
+                foreach ($item->getTaxes() as $tax) {
+                    if ($tax instanceof Order\Tax) {
+                        $addTax($tax->getRate(), $tax->getAmount() * $newDiscountPercentage, $taxRateValues);
+                    }
+                }
+            }
+
+            if($item->getBaseTaxes() instanceof Object\Fieldcollection) {
+                foreach ($item->getBaseTaxes() as $tax) {
+                    if ($tax instanceof Order\Tax) {
+                        $addTax($tax->getRate(), $tax->getAmount() * $baseNewDiscountPercentage, $baseTaxRateValues);
+                    }
+                }
             }
         }
 
         //Recalculate Total and TotalTax
         $total = ($subTotal + $this->getShipping() + $this->getPaymentFee() + $totalTax) - $this->getDiscount();
+        $baseTotal = ($baseSubTotal + $this->getBaseShipping() + $this->getBasePaymentFee() + $baseTotalTax) - $this->getBaseDiscount();
+
         $totalTax = $subTotalTax + $this->getShippingTax() + $this->getPaymentFeeTax();
+        $baseTotalTax = $baseSubTotalTax + $this->getBaseShippingTax() + $this->getBasePaymentFeeTax();
 
         $this->setSubtotal($subTotal);
+        $this->setBaseSubtotal($baseSubTotal);
+
         $this->setSubtotalTax($subTotalTax);
+        $this->setBaseSubtotalTax($baseSubTotalTax);
+
         $this->setTotal($total);
+        $this->setBaseTotal($baseTotal);
+
         $this->setTotalTax($totalTax);
+        $this->setBaseTotalTax($baseTotalTax);
 
         //Recalculate detailed Taxes
         if ($this instanceof self) {
             if ($this->getPaymentFeeTaxRate() > 0) {
-                $addTax($this->getPaymentFeeTaxRate(), $this->getPaymentFeeTax());
+                $addTax($this->getPaymentFeeTaxRate(), $this->getPaymentFeeTax(), $taxRateValues);
+                $addTax($this->getPaymentFeeTaxRate(), $this->getBasePaymentFeeTax(), $baseTaxRateValues);
             }
 
             if ($this->getShippingTaxRate()) {
-                $addTax($this->getShippingTaxRate(), $this->getShippingTax());
+                $addTax($this->getShippingTaxRate(), $this->getShippingTax(), $taxRateValues);
+                $addTax($this->getShippingTaxRate(), $this->getBaseShippingTax(), $baseTaxRateValues);
             }
         }
 
-        foreach ($this->getTaxes() as $tax) {
-            if (array_key_exists((string)$tax->getRate(), $taxRateValues)) {
-                $tax->setAmount($taxRateValues[(string)$tax->getRate()]);
+        if($this->getTaxes() instanceof Object\Fieldcollection) {
+            foreach ($this->getTaxes() as $tax) {
+                if ($tax instanceof Order\Tax) {
+                    if (array_key_exists((string)$tax->getRate(), $taxRateValues)) {
+                        $tax->setAmount($taxRateValues[(string)$tax->getRate()]);
+                    }
+                }
+            }
+        }
+
+        if($this->getBaseTaxes() instanceof Object\Fieldcollection) {
+            foreach ($this->getBaseTaxes() as $tax) {
+                if ($tax instanceof Order\Tax) {
+                    if (array_key_exists((string)$tax->getRate(), $baseTaxRateValues)) {
+                            $tax->setAmount($baseTaxRateValues[(string)$tax->getRate()]);
+                    }
+                }
             }
         }
 
         $this->save();
-
 
         $translate = \CoreShop::getTools()->getTranslate();
 
@@ -1026,11 +1162,81 @@ class Order extends Base
     }
 
     /**
+     * @return Currency
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseCurrency()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param Currency $baseCurrency
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseCurrency($baseCurrency)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return float
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseToOrderRate()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param float $baseToOrderRate
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseToOrderRate($baseToOrderRate)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
      * @return double
      *
      * @throws ObjectUnsupportedException
      */
     public function getDiscount()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $discount
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setDiscount($discount)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseDiscount()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseDiscount
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseDiscount($baseDiscount)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1056,11 +1262,21 @@ class Order extends Base
     }
 
     /**
-     * @param double $discount
+     * @param double $baseDiscountWithoutTax
      *
      * @throws ObjectUnsupportedException
      */
-    public function setDiscount($discount)
+    public function setBaseDiscountWithoutTax($baseDiscountWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseDiscountWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1090,6 +1306,26 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseSubtotalTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseSubtotalTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseSubtotalTax($baseSubtotalTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getSubtotalWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1101,6 +1337,26 @@ class Order extends Base
      * @throws ObjectUnsupportedException
      */
     public function setSubtotalWithoutTax($subtotalWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseSubtotalWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseSubtotalWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseSubtotalWithoutTax($baseSubtotalWithoutTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1130,6 +1386,26 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseSubtotal()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseSubtotal
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseSubtotal($baseSubtotal)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getShipping()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1150,17 +1426,17 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
-    public function getShippingTaxRate()
+    public function getBaseShipping()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
 
     /**
-     * @param double $shippingTaxRate
+     * @param double $baseShipping
      *
      * @throws ObjectUnsupportedException
      */
-    public function setShippingTaxRate($shippingTaxRate)
+    public function setBaseShipping($baseShipping)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1190,6 +1466,46 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseShippingWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseShippingWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseShippingWithoutTax($baseShippingWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getShippingTaxRate()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $shippingTaxRate
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setShippingTaxRate($shippingTaxRate)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getShippingTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1210,6 +1526,26 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseShippingTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseShippingTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseShippingTax($baseShippingTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getPaymentFee()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1221,6 +1557,26 @@ class Order extends Base
      * @throws ObjectUnsupportedException
      */
     public function setPaymentFee($paymentFee)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBasePaymentFee()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePaymentFee
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePaymentFee($basePaymentFee)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1270,6 +1626,26 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBasePaymentFeeWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePaymentFeeWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePaymentFeeWithoutTax($basePaymentFeeWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getPaymentFeeTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1281,6 +1657,26 @@ class Order extends Base
      * @throws ObjectUnsupportedException
      */
     public function setPaymentFeeTax($paymentFeeTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBasePaymentFeeTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePaymentFeeTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePaymentFeeTax($basePaymentFeeTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1310,6 +1706,26 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseTotalTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalTax($baseTotalTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getTotalWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1330,6 +1746,26 @@ class Order extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseTotalWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalWithtouTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalWithoutTax($baseTotalWithtouTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getTotal()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -1341,6 +1777,26 @@ class Order extends Base
      * @throws ObjectUnsupportedException
      */
     public function setTotal($total)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTotal()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotal
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotal($baseTotal)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -1381,6 +1837,26 @@ class Order extends Base
      * @throws ObjectUnsupportedException
      */
     public function setTaxes($taxes)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return mixed
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTaxes()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param mixed $taxes
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTaxes($taxes)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }

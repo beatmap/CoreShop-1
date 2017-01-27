@@ -29,6 +29,22 @@ use Pimcore\Model\Object;
  *
  * @method static Object\Listing\Concrete getByOrderItem ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByProduct ($value, $limit = 0)
+ *
+ * @method static Object\Listing\Concrete getByWholesalePrice ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByRetailPrice ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseRetailPrice ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByPrice ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePrice ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByPriceWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePriceWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByAmount ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByTotalTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotalTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByTotal ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotal ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByIsGiftItem ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByTaxes ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTaxes ($value, $limit = 0)
  */
 class Item extends Base
 {
@@ -104,7 +120,6 @@ class Item extends Base
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
 
-
     /**
      * @return double
      *
@@ -130,6 +145,26 @@ class Item extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBasePrice()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePrice
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePrice($basePrice)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getPriceWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -141,6 +176,26 @@ class Item extends Base
      * @throws ObjectUnsupportedException
      */
     public function setPriceWithoutTax($priceWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBasePriceWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePriceWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePriceWithoutTax($basePriceWithoutTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -190,6 +245,26 @@ class Item extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseTotal()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotal
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotal($baseTotal)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getTotalWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -201,6 +276,26 @@ class Item extends Base
      * @throws ObjectUnsupportedException
      */
     public function setTotalWithoutTax($totalWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTotalWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalWithoutTax($baseTotalWithoutTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -226,6 +321,26 @@ class Item extends Base
     }
 
     /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTotalTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalTax($baseTotalTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
      * @return mixed
      *
      * @throws ObjectUnsupportedException
@@ -241,6 +356,26 @@ class Item extends Base
      * @throws ObjectUnsupportedException
      */
     public function setTaxes($taxes)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return mixed
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTaxes()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param mixed $baseTaxes
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTaxes($baseTaxes)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }

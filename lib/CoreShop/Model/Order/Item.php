@@ -59,6 +59,16 @@ class Item extends Base
     }
 
     /**
+     * Calculate Total of OrderItem without tax.
+     *
+     * @return float
+     */
+    public function getBaseTotalWithoutTax()
+    {
+        return $this->getAmount() * $this->getBasePriceWithoutTax();
+    }
+
+    /**
      * Get Order for OrderItem.
      *
      * @return null|\Pimcore\Model\Object\AbstractObject
@@ -165,6 +175,26 @@ class Item extends Base
     }
 
     /**
+     * @return int
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getAmount()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param int $amount
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setAmount($amount)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
      * @return double
      *
      * @throws ObjectUnsupportedException
@@ -205,6 +235,26 @@ class Item extends Base
     }
 
     /**
+     * @param double $baseRetailPrice
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseRetailPrice($baseRetailPrice)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseRetailPrice()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
      * @return double
      *
      * @throws ObjectUnsupportedException
@@ -220,6 +270,26 @@ class Item extends Base
      * @throws ObjectUnsupportedException
      */
     public function setPrice($price)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBasePrice()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePrice
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePrice($basePrice)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -245,21 +315,21 @@ class Item extends Base
     }
 
     /**
-     * @return int
+     * @return double
      *
      * @throws ObjectUnsupportedException
      */
-    public function getAmount()
+    public function getBasePriceWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
 
     /**
-     * @param int $amount
+     * @param double $basePriceWithoutTax
      *
      * @throws ObjectUnsupportedException
      */
-    public function setAmount($amount)
+    public function setBasePriceWithoutTax($basePriceWithoutTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -289,6 +359,26 @@ class Item extends Base
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseTotalTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalTax($baseTotalTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getTotal()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -300,6 +390,26 @@ class Item extends Base
      * @throws ObjectUnsupportedException
      */
     public function setTotal($total)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTotal()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotal
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotal($baseTotal)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -360,6 +470,26 @@ class Item extends Base
      * @throws ObjectUnsupportedException
      */
     public function setTaxes($taxes)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return mixed
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTaxes()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param mixed $baseTaxes
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTaxes($baseTaxes)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }

@@ -385,7 +385,7 @@ class Product extends Base
     }
 
     /**
-     * Get Sales Price (without discounts), with or without taxes
+     * Get Sales Price (without discounts) without Currency conversion
      *
      * @param bool $withTax
      * @return float
@@ -466,15 +466,14 @@ class Product extends Base
     }
 
     /**
-     * Get Product Price with Tax.
+     * Get Product Price without Currency conversion
      *
      * @param boolean $withTax
-     * @param boolean $doCurrencyConvert
+     * @param boolean $doCurrencyConvert @deprecated the cart is responsible for conversion stuff
      *
      * @return double
      */
-    public function getPrice($withTax = true, $doCurrencyConvert = true)
-    {
+    public function getPrice($withTax = true, $doCurrencyConvert = true) {
         $netPrice = $this->getSalesPrice(false);
 
         //Apply Discounts on Price, currently, only net-discounts are supported
@@ -595,6 +594,28 @@ class Product extends Base
         }
 
         return 0;
+    }
+
+    /**
+     * Get Product Tax Amount.
+     *
+     * @param bool $asArray
+     *
+     * @return float|array
+     */
+    public function getBaseTaxAmount($asArray = false)
+    {
+        $calculator = $this->getTaxCalculator();
+
+        if ($calculator) {
+            return $calculator->getTaxesAmount($this->getPrice(false), $asArray);
+        }
+
+        if ($asArray) {
+            return [];
+        }
+
+        return 0.0;
     }
 
     /**

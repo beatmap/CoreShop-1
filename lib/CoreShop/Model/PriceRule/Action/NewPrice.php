@@ -98,7 +98,7 @@ class NewPrice extends AbstractAction
      */
     public function getPrice(Product $product)
     {
-        return \CoreShop::getTools()->convertToCurrency($this->getNewPrice(), \CoreShop::getTools()->getCurrency(), Currency::getById($this->getCurrency()));
+        return $this->getNewPrice();
     }
 
     /**

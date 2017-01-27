@@ -33,24 +33,38 @@ use Pimcore\Model\Object;
  * @method static Object\Listing\Concrete getByInvoiceDate ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByInvoiceNumber ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByLang ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByCarrier ($value, $limit = 0)
- * @method static Object\Listing\Concrete getByCurrency ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByDiscount ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseDiscount ($value, $limit = 0)
  * @method static Object\Listing\Concrete getBySubtotal ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseSubtotal ($value, $limit = 0)
  * @method static Object\Listing\Concrete getBySubtotalWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseSubtotalWithoutTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getBySubtotalTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseSubtotalTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByShipping ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShipping ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByShippingTaxRate ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShippingTaxRate ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByShippingWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShippingWithoutTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByShippingTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseShippingTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentFee ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFee ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentFeeTaxRate ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFeeTaxRate ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentFeeWithoutTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFeeWithoutTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByPaymentFeeTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBasePaymentFeeTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTotalTax ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotalTax ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTotal ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotal ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTotalPayed ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTotalPayed ($value, $limit = 0)
  * @method static Object\Listing\Concrete getByTaxes ($value, $limit = 0)
+ * @method static Object\Listing\Concrete getByBaseTaxes ($value, $limit = 0)
  */
 class Invoice extends Document
 {
@@ -163,7 +177,6 @@ class Invoice extends Document
         }
 
         $this->setLang($order->getLang());
-        $this->setCurrency($order->getCurrency());
         $this->setParent($order->getPathForInvoices());
         $this->setKey(\Pimcore\File::getValidFilename($this->getInvoiceNumber()));
         $this->save(); //We need so save first, to create the items beneath the document
@@ -195,6 +208,7 @@ class Invoice extends Document
 
         if ($documentItem instanceof Invoice\Item) {
             $documentItem->setRetailPrice($orderItem->getRetailPrice());
+            $documentItem->setBaseRetailPrice($orderItem->getBaseRetailPrice());
             $documentItem->setWholesalePrice($orderItem->getWholesalePrice());
             $documentItem->save();
         }
@@ -219,8 +233,15 @@ class Invoice extends Document
         $shippingWithoutTax = 0;
         $shippingTax = 0;
 
+        $baseShippingWithTax = 0;
+        $baseShippingWithoutTax = 0;
+        $baseShippingTax = 0;
+
         $totalShipping = $this->getOrder()->getShipping();
+        $baseTotalShipping = $this->getOrder()->getBaseShipping();
+
         $invoicedShipping = $this->getProcessedValue('shipping');
+        $baseInvoicedShipping = $this->getProcessedValue('baseShipping');
 
         if ($totalShipping - $invoicedShipping > 0) {
             $shippingTaxRate = $this->getOrder()->getShippingTaxRate();
@@ -234,13 +255,23 @@ class Invoice extends Document
             $shippingWithoutTax = $taxCalculator->removeTaxes($shippingWithTax);
             $shippingTax = $shippingWithTax - $shippingWithoutTax;
 
+            $baseShippingWithTax = $baseTotalShipping - $baseInvoicedShipping;
+            $baseShippingWithoutTax = $taxCalculator->removeTaxes($baseShippingWithTax);
+            $baseShippingTax = $baseShippingWithTax - $baseShippingWithoutTax;
+
             $this->addTax('shipping', $shippingTaxRate, $shippingTax);
+            $this->addTax('shipping', $shippingTaxRate, $baseShippingTax, true);
         }
+
+        $this->setShippingTaxRate($this->getOrder()->getShippingTaxRate());
 
         $this->setShipping($shippingWithTax);
         $this->setShippingWithoutTax($shippingWithoutTax);
         $this->setShippingTax($shippingTax);
-        $this->setShippingTaxRate($this->getOrder()->getShippingTaxRate());
+
+        $this->setBaseShipping($baseShippingWithTax);
+        $this->setBaseShippingWithoutTax($baseShippingWithoutTax);
+        $this->setBaseShippingTax($baseShippingTax);
     }
 
     /**
@@ -277,6 +308,38 @@ class Invoice extends Document
     }
 
     /**
+     * calculate Payment Fees for Invoice
+     */
+    protected function calculateBasePaymentFees()
+    {
+        $basePaymentFeeWithTax = 0;
+        $basePaymentFeeWithoutTax = 0;
+        $basePaymentFeeTax = 0;
+
+        $baseTotalPaymentFee = $this->getOrder()->getBasePaymentFee();
+        $baseInvoicedPaymentFees = $this->getProcessedValue('basePaymentFee');
+
+        if ($baseTotalPaymentFee - $baseInvoicedPaymentFees > 0) {
+            $paymentFeeTaxRate = $this->getOrder()->getPaymentFeeTaxRate();
+
+            $taxRate = \CoreShop\Model\Tax::create();
+            $taxRate->setRate($paymentFeeTaxRate);
+
+            $taxCalculator = new TaxCalculator([$taxRate]);
+
+            $basePaymentFeeWithTax = $baseTotalPaymentFee - $baseInvoicedPaymentFees;
+            $basePaymentFeeWithoutTax = $taxCalculator->removeTaxes($basePaymentFeeWithTax);
+            $basePaymentFeeTax = $basePaymentFeeWithTax - $basePaymentFeeWithoutTax;
+
+            $this->addTax('payment', $paymentFeeTaxRate, $basePaymentFeeTax, true);
+        }
+
+        $this->setBasePaymentFee($basePaymentFeeWithTax);
+        $this->setBasePaymentFeeWithoutTax($basePaymentFeeWithoutTax);
+        $this->setBasePaymentFeeTax($basePaymentFeeTax);
+    }
+
+    /**
      * Calculate Discount for Invoice
      */
     protected function calculateDiscount()
@@ -297,6 +360,29 @@ class Invoice extends Document
         $this->setDiscount($discountWithTax);
         $this->setDiscountWithoutTax($discountWithoutTax);
         $this->setDiscountTax($discountTax);
+    }
+
+    /**
+     * Calculate Discount for Invoice
+     */
+    protected function calculateBaseDiscount()
+    {
+        $baseDiscountWithTax = 0;
+        $baseDiscountWithoutTax = 0;
+        $baseDiscountTax = 0;
+
+        $baseTotalDiscount = $this->getOrder()->getBaseDiscount();
+        $baseInvoicedDiscount = $this->getProcessedValue('baseDiscount');
+
+        if ($baseTotalDiscount - $baseInvoicedDiscount > 0) {
+            $baseDiscountWithTax = $baseTotalDiscount - $baseInvoicedDiscount;
+            $baseDiscountWithoutTax = $this->getOrder()->getBaseDiscountWithoutTax() - $this->getProcessedValue('baseDiscountWithoutTax');
+            $baseDiscountTax = $baseDiscountWithTax - $baseDiscountWithoutTax;
+        }
+
+        $this->setBaseDiscount($baseDiscountWithTax);
+        $this->setBaseDiscountWithoutTax($baseDiscountWithoutTax);
+        $this->setBaseDiscountTax($baseDiscountTax);
     }
 
     /**
@@ -328,6 +414,34 @@ class Invoice extends Document
         $this->setTotalWithoutTax($totalWithoutTax);
     }
 
+    /**
+     * Calculate Total for invoice
+     */
+    protected function calculateBaseTotal()
+    {
+        $baseSubtotalTax = $this->getBaseSubtotalTax();
+        $baseShippingTax = $this->getBaseShippingTax();
+        $basePaymentFeeTax = $this->getBasePaymentFeeTax();
+        $baseDiscountTax = $this->getBaseDiscountTax();
+
+        $baseSubtotalWithTax = $this->getBaseSubtotal();
+        $baseShippingWithTax = $this->getBaseShipping();
+        $basePaymentFeeWithTax = $this->getBasePaymentFee();
+        $baseDiscountWithTax = $this->getBaseDiscount();
+
+        $baseSubtotalWithoutTax = $this->getBaseSubtotalWithoutTax();
+        $baseShippingWithoutTax = $this->getBaseShippingWithoutTax();
+        $basePaymentFeeWithoutTax = $this->getBasePaymentFeeWithoutTax();
+        $baseDiscountWithoutTax = $this->getBaseDiscountWithoutTax();
+
+        $baseTotalTax = ($baseSubtotalTax + $baseShippingTax + $basePaymentFeeTax) - $baseDiscountTax;
+        $baseTotal = ($baseSubtotalWithTax + $baseShippingWithTax + $basePaymentFeeWithTax) - $baseDiscountWithTax;
+        $baseTotalWithoutTax = ($baseSubtotalWithoutTax + $baseShippingWithoutTax + $basePaymentFeeWithoutTax) - $baseDiscountWithoutTax;
+
+        $this->setBaseTotal($baseTotal);
+        $this->setBaseTotalTax($baseTotalTax);
+        $this->setBaseTotalWithoutTax($baseTotalWithoutTax);
+    }
 
 
     /**
@@ -338,17 +452,32 @@ class Invoice extends Document
         $discountPercentage = $this->getOrder()->getDiscountPercentage();
 
         $subtotalWithTax = 0;
+        $baseSubtotalWithTax = 0;
+
         $subtotalWithoutTax = 0;
+        $baseSubtotalWithoutTax = 0;
+
         $subtotalTax = 0;
+        $baseSubtotalTax = 0;
 
         foreach ($this->getItems() as $item) {
             $subtotalWithTax += $item->getTotal();
             $subtotalWithoutTax += $item->getTotalWithoutTax();
             $subtotalTax += $item->getTotalTax();
 
+            $baseSubtotalWithTax += $item->getBaseTotal();
+            $baseSubtotalWithoutTax += $item->getBaseTotalWithoutTax();
+            $baseSubtotalTax += $item->getBaseTotalTax();
+
             foreach ($item->getTaxes() as $tax) {
                 if ($tax instanceof Tax) {
                     $this->addTax($tax->getName(), $tax->getRate(), $tax->getAmount() * $discountPercentage);
+                }
+            }
+
+            foreach ($item->getBaseTaxes() as $tax) {
+                if ($tax instanceof Tax) {
+                    $this->addTax($tax->getName(), $tax->getRate(), $tax->getAmount() * $discountPercentage, true);
                 }
             }
         }
@@ -356,16 +485,21 @@ class Invoice extends Document
         $this->setSubtotal($subtotalWithTax);
         $this->setSubtotalWithoutTax($subtotalWithoutTax);
         $this->setSubtotalTax($subtotalTax);
+
+        $this->setBaseSubtotal($baseSubtotalWithTax);
+        $this->setBaseSubtotalWithoutTax($baseSubtotalWithoutTax);
+        $this->setBaseSubtotalTax($baseSubtotalTax);
     }
 
     /**
      * @param $name
      * @param $rate
      * @param $amount
+     * @param $base
      */
-    public function addTax($name, $rate, $amount)
+    public function addTax($name, $rate, $amount, $base = false)
     {
-        $taxes = $this->getTaxes();
+        $taxes = $base ? $this->getBaseTaxes() : $this->getTaxes();
 
         if (!$taxes instanceof Object\Fieldcollection) {
             $taxes = new Object\Fieldcollection();
@@ -391,7 +525,13 @@ class Invoice extends Document
             ]);
 
             $taxes->add($tax);
-            $this->setTaxes($taxes);
+
+            if ($base) {
+                $this->setBaseTaxes($taxes);
+            }
+            else {
+                $this->setTaxes($taxes);
+            }
         }
     }
 
@@ -403,8 +543,11 @@ class Invoice extends Document
         $this->calculateSubtotal();
         $this->calculateShipping();
         $this->calculatePaymentFees();
+        $this->calculateBasePaymentFees();
         $this->calculateDiscount();
+        $this->calculateBaseDiscount();
         $this->calculateTotal();
+        $this->calculateBaseTotal();
 
         $this->save();
     }
@@ -502,26 +645,6 @@ class Invoice extends Document
     }
 
     /**
-     * @return Currency
-     *
-     * @throws ObjectUnsupportedException
-     */
-    public function getCurrency()
-    {
-        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
-    }
-
-    /**
-     * @param Currency $currency
-     *
-     * @throws ObjectUnsupportedException
-     */
-    public function setCurrency($currency)
-    {
-        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
-    }
-
-    /**
      * @return double
      *
      * @throws ObjectUnsupportedException
@@ -542,11 +665,21 @@ class Invoice extends Document
     }
 
     /**
-     * @param double $discountWithoutTax
+     * @return double
      *
      * @throws ObjectUnsupportedException
      */
-    public function setDiscountWithoutTax($discountWithoutTax)
+    public function getBaseDiscount()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseDiscount
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseDiscount($baseDiscount)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -560,7 +693,6 @@ class Invoice extends Document
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
-
 
     /**
      * @param double $discountTax
@@ -577,7 +709,58 @@ class Invoice extends Document
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseDiscountTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+
+    /**
+     * @param double $baseDiscountTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseDiscountTax($baseDiscountTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getDiscountWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $discountWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setDiscountWithoutTax($discountWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseDiscountWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseDiscountWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseDiscountWithoutTax($baseDiscountWithoutTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -598,6 +781,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setShipping($shipping)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseShipping()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseShipping
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseShipping($baseShipping)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -647,6 +850,26 @@ class Invoice extends Document
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseShippingWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseShippingWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseShippingWithoutTax($baseShippingWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getShippingTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -667,6 +890,26 @@ class Invoice extends Document
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseShippingTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseShippingTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseShippingTax($baseShippingTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getPaymentFee()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -678,6 +921,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setPaymentFee($paymentFee)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBasePaymentFee()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePaymentFee
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePaymentFee($basePaymentFee)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -727,6 +990,26 @@ class Invoice extends Document
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBasePaymentFeeWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePaymentFeeWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePaymentFeeWithoutTax($basePaymentFeeWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getPaymentFeeTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -738,6 +1021,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setPaymentFeeTax($paymentFeeTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBasePaymentFeeTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $basePaymentFeeTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBasePaymentFeeTax($basePaymentFeeTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -767,6 +1070,26 @@ class Invoice extends Document
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseTotalTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalTax($baseTotalTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getTotalWithoutTax()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -778,6 +1101,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setTotalWithoutTax($totalWithtouTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTotalWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotalWithtouTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotalWithoutTax($baseTotalWithtouTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -802,6 +1145,25 @@ class Invoice extends Document
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
 
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTotal()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseTotal
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTotal($baseTotal)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
 
     /**
      * @return double
@@ -819,6 +1181,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setSubtotalTax($subtotalTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseSubtotalTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseSubtotalTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseSubtotalTax($baseSubtotalTax)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -848,6 +1230,26 @@ class Invoice extends Document
      *
      * @throws ObjectUnsupportedException
      */
+    public function getBaseSubtotalWithoutTax()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseSubtotalWithoutTax
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseSubtotalWithoutTax($baseSubtotalWithoutTax)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
     public function getSubtotal()
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
@@ -859,6 +1261,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setSubtotal($subtotal)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return double
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseSubtotal()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param double $baseSubtotal
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseSubtotal($baseSubtotal)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
@@ -879,6 +1301,26 @@ class Invoice extends Document
      * @throws ObjectUnsupportedException
      */
     public function setTaxes($taxes)
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @return mixed
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function getBaseTaxes()
+    {
+        throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
+    }
+
+    /**
+     * @param mixed $baseTaxes
+     *
+     * @throws ObjectUnsupportedException
+     */
+    public function setBaseTaxes($baseTaxes)
     {
         throw new ObjectUnsupportedException(__FUNCTION__, get_class($this));
     }
